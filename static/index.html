@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostForge - Turn one piece of content into a week of posts</title>
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --card: #151a23;
+            --accent: #7c5cff;
+            --text: #e8eaf0;
+            --muted: #9aa3b2;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, sans-serif;
+        }
+
+        .wrap {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 8px;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin-bottom: 28px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 220px;
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid #2a3140;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 0.95rem;
+            resize: vertical;
+        }
+
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            padding: 12px 22px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        button.ghost {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            margin-left: 8px;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: wait;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid #2a3140;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 16px;
+            white-space: pre-wrap;
+        }
+
+        .card h3 {
+            color: var(--accent);
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .copy {
+            float: right;
+            font-size: .75rem;
+            background: #2a3140;
+            padding: 4px 10px;
+            margin: 0;
+        }
+
+        .err {
+            color: #ff6b6b;
+            margin-top: 12px;
+        }
+
+        .pro {
+            color: #5cff9d;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h1>PostForge ⚡</h1>
+        <p class="sub">Paste a blog post, newsletter, or transcript. Get a LinkedIn post,
+            an X thread, and an Instagram caption in seconds. Free: 3/day. Pro: unlimited for $15/mo.</p>
+        <p id="proBadge" class="pro" hidden>✓ Pro account active, unlimited generations</p>
+
+        <textarea id="content" placeholder="Paste your content here (min 100 characters)..."></textarea>
+        <div>
+            <button id="go">Generate posts</button>
+            <button id="upgrade" class="ghost">Upgrade to Pro · $15/mo</button>
+        </div>
+        <p id="err" class="err"></p>
+        <div id="out"></div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+
+        // Activate Pro after Stripe redirect
+        const params = new URLSearchParams(location.search);
+        if (params.get("session_id")) {
+            fetch(`/api/activate?session_id=${params.get("session_id")}`)
+                .then(r => r.ok ? r.json() : Promise.reject())
+                .then(d => { localStorage.setItem("pf_token", d.token); history.replaceState({}, "", "/"); showPro(); })
+                .catch(() => { });
+        }
+        function showPro() { if (localStorage.getItem("pf_token")) $("proBadge").hidden = false; }
+        showPro();
+
+        $("upgrade").onclick = async () => {
+            const r = await fetch("/api/checkout", { method: "POST" });
+            const d = await r.json();
+            location.href = d.url;
+        };
+
+        $("go").onclick = async () => {
+            $("err").textContent = ""; $("out").innerHTML = ""; $("go").disabled = true;
+            const headers = { "Content-Type": "application/json" };
+            const t = localStorage.getItem("pf_token");
+            if (t) headers["Authorization"] = "Bearer " + t;
+            try {
+                const r = await fetch("/api/generate", {
+                    method: "POST", headers,
+                    body: JSON.stringify({ content: $("content").value })
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || "Something went wrong");
+                render("LinkedIn", d.linkedin);
+                render("X Thread", (d.x_thread || []).map((t, i) => `${i + 1}/ ${t}`).join("\n\n"));
+                render("Instagram", d.instagram);
+            } catch (e) { $("err").textContent = e.message; }
+            $("go").disabled = false;
+        };
+
+        function render(title, text) {
+            if (!text) return;
+            const div = document.createElement("div");
+            div.className = "card";
+            div.innerHTML = `<button class="copy">Copy</button><h3>${title}</h3>`;
+            div.append(text);
+            div.querySelector(".copy").onclick = () => navigator.clipboard.writeText(text);
+            $("out").append(div);
+        }
+    </script>
+</body>
+
+</html>

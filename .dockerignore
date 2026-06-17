@@ -1,0 +1,8 @@
+.env
+*.db
+__pycache__/
+stripe.exe
+cloudflared.exe
+cloudflared.msi
+.git
+.github
